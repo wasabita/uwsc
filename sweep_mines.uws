@@ -1,0 +1,137 @@
+public id=GETID("マインスイーパー")
+public col=0
+public row=0
+i=0
+NUM = GETITEM(id,ITM_ACCCLK)
+if (col=0)	//最初だけ幅、高さを求める
+	col=trim(betweenstr(ALL_ITEM_LIST[num-1],"横","、"))
+	row=trim(betweenstr(ALL_ITEM_LIST[num-1],"縦","の"))
+endif
+flg = CLK_ACC or CLK_SHORT or CLK_MUSMOVE
+CLKITEM(id,"横 "+int(col/2+1) +"、縦 "+int(row/2+1),flg)
+while true
+	sweep()
+	fukidasi("loading")
+	MOUSEORG(id,1)
+	btn(left,click,170,15)
+	if GETID("負けました", "#32770", 0.01)>0 then break
+	if GETID("勝ちました", "#32770", 0.01)>0 then break
+wend
+
+procedure sweep()
+	MOUSEORG(id,1)
+	xx=40
+	yy=40
+
+	NonAction=true
+	dim field[row][col]	//全てのマスの状態を格納
+	dim check[row][col]	//攻略に関係しないマスを記録
+	NUM = GETITEM(id,ITM_ACCCLK)
+	btn(left,click,170,15)
+	//すべてのマスの状態を記録
+	for y=0 to col-1
+		for x=0 to row-1
+			status=ALL_ITEM_LIST[x+y*row]
+			if (pos("印",status])>0)
+			//旗が有るとき
+				field[x][y]=9
+			elseif (pos("ない",status])<>0)
+			//開いていないとき
+				field[x][y]=-1
+			elseif (pos("あります",status])>0)
+			//開いているかつ、周りに地雷があるとき地雷の個数を記録
+				field[x][y]=val(trim(betweenstr(status,"周囲に","個")))
+			else
+			//開いているかつ、周りに地雷がないとき
+				field[x][y]=0
+				check[x][y]=1
+			endif
+		next
+	next
+	fukidasi("")
+
+	dim closedMassX[8]	//周囲8マスのうち、閉じているマスのX座標を格納
+	dim closedMassY[8]
+	x=0
+	y=0
+	isRetry=true	//マスを開けるか旗を立てたときtrue
+	while (isRetry)
+		isRetry=false
+		for x=0 to row-1
+			for y=0 to col-1
+				flagCount=0
+				closedCount=0
+				if (check[x][y]=1 or field[x][y]=-1)
+					continue
+				endif
+				SETCLEAR(closedMassX,0)
+				SETCLEAR(closedMassY,0)
+				//周囲8マス旗と閉マスの数を数える
+				for i=0 to 2
+					for j=0 to 2
+						if ((i=1 and j=1) or (x+i-1<0 or row=x+i-1) or (y+j-1<0 or col=y+j-1))
+							continue
+						endif
+						if (field[x+i-1][y+j-1]=9)
+							flagCount=flagCount+1
+						elseif (field[x+i-1][y+j-1]=-1)
+							closedMassX[closedCount]=x+i-1
+							closedMassY[closedCount]=y+j-1
+							closedCount=closedCount+1
+						endif
+					next
+				next
+
+				//x,yをダブルクリックして周囲の閉マス開く
+				if (flagCount=field[x][y] and closedCount>0 and field[x][y]<>0)
+					flg = CLK_ACC or CLK_SHORT or CLK_MUSMOVE or CLK_DBLCLK
+				//	CLKITEM(id,"横 "+(y+1) +"、縦 "+(x+1),flg)
+					btn(left,click,xx+18.1*x,yy+18.1*y,50)
+					btn(left,click,xx+18.1*x,yy+18.1*y,10)
+					check[x][y]=1
+					for i=0 to 2
+						for j=0 to 2
+							if ((i=1 and j=1) or (x+i-1<0 or row=x+i-1) or (y+j-1<0 or col=y+j-1))
+								continue
+							endif
+							//未開の周囲マスはfieldを0にし、最後にもう一度行う
+							if (field[x+i-1][y+j-1]=-1)
+								field[x+i-1][y+j-1]=0
+								isRetry=true
+							endif
+						next
+					next
+					NonAction=false
+				//閉マスに旗を立てる
+				elseif (flagCount+closedCount=field[x][y])
+					for i=0 to closedCount-1
+						flg = CLK_ACC or CLK_SHORT or CLK_MUSMOVE or CLK_RIGHTCLK
+						//CLKITEM(id,"横 "+(closedMassY[i]+1) +"、縦 "+(closedMassX[i]+1),flg)
+						btn(right,click,xx+18.1*closedMassX[i],yy+18.1*closedMassY[i],50)
+						field[closedMassX[i]][closedMassY[i]]=9
+						check[closedMassX[i]][closedMassY[i]]=1
+						NonAction=false
+						isRetry=true
+					next
+				endif
+			next
+		next
+	wend
+	//何も行動できなかった場合、ランダムクリック
+	if (NonAction)
+		if GETID("負けました", "#32770", 0.01)>0 then exit
+		if GETID("勝ちました", "#32770", 0.01)>0 then exit
+		fukidasi("ランダム")
+		while true
+			x=random(row)
+			y=random(col)
+			if (field[x][y]<0)
+				flg = CLK_ACC or CLK_SHORT or CLK_MUSMOVE or CLK_LEFTCLK
+				//CLKITEM(id,"横 "+(y+1) +"、縦 "+(x+1),flg)
+				btn(left,click,xx+18.1*x,yy+18.1*y,100)
+				break
+			endif
+		wend
+	endif
+
+fend
